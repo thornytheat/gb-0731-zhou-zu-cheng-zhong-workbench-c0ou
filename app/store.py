@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS events (
     message TEXT NOT NULL,
     source_time TEXT
 );
+CREATE TABLE IF NOT EXISTS permits (
+    run_id TEXT NOT NULL REFERENCES runs(id),
+    pass_id TEXT NOT NULL,
+    permit_id TEXT NOT NULL,
+    plate TEXT NOT NULL,
+    issued_at TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    PRIMARY KEY (run_id, pass_id)
+);
 CREATE INDEX IF NOT EXISTS run_history ON runs(created_at DESC, id DESC);
 """
 
@@ -69,6 +79,14 @@ class Store:
             rows = db.execute("SELECT * FROM events WHERE seq > ? ORDER BY seq LIMIT ?", (after, limit))
             return [dict(row) for row in rows]
 
+    def permits(self, run_id):
+        with closing(self.connect()) as db:
+            rows = db.execute(
+                "SELECT pass_id, permit_id, plate, issued_at, decision, snapshot_sha256 "
+                "FROM permits WHERE run_id = ? ORDER BY pass_id", (run_id,),
+            )
+            return [dict(row) for row in rows]
+
 
 def find(db, run_id):
     row = db.execute("SELECT manifest, results FROM runs WHERE id = ?", (run_id,)).fetchone()
@@ -84,3 +102,12 @@ def add_run(db, manifest, results):
 def add_events(db, run_id, events):
     db.executemany("""INSERT INTO events (run_id,time,level,code,message,source_time)
                     VALUES (?, ?, ?, ?, ?, ?)""", ((run_id, *event) for event in events))
+
+
+def add_permit(db, permit):
+    db.execute(
+        "INSERT INTO permits (run_id, pass_id, permit_id, plate, issued_at, decision, snapshot_sha256) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (permit["run_id"], permit["pass_id"], permit["permit_id"], permit["plate"],
+         permit["issued_at"], permit["decision"], permit["snapshot_sha256"]),
+    )

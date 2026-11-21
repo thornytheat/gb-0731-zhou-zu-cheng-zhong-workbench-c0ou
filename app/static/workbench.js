@@ -1,7 +1,7 @@
 import {byId, dateTime, element, moduleViews, renderChart, renderTable} from "./views.js";
 import {startTelemetry} from "./telemetry.js";
 
-const state = {snapshot: null, history: [], module: "axles", view: 0, busy: false, passId: ""};
+const state = {snapshot: null, gate: null, history: [], module: "axles", view: 0, busy: false, passId: ""};
 const nav = Array.from(document.querySelectorAll("[data-module]"));
 const sample = byId("sample");
 const vehicle = byId("vehicle");
@@ -92,6 +92,17 @@ async function refresh(runId) {
   const query = runId ? `run_id=${encodeURIComponent(runId)}` : `sample=${encodeURIComponent(sample.value)}`;
   state.snapshot = await request(`/api/workbench?${query}`);
   if (state.snapshot.manifest) sample.value = state.snapshot.manifest.sample;
+  await refreshGate(runId);
+}
+
+async function refreshGate(runId) {
+  const id = runId ?? state.snapshot?.manifest?.run_id;
+  if (id) {
+    state.gate = await request(`/api/batches/${encodeURIComponent(id)}/gate`);
+  } else {
+    state.gate = await request(`/api/gate?sample=${encodeURIComponent(sample.value)}`);
+  }
+  if (state.snapshot) state.snapshot.gate = state.gate.data;
 }
 
 async function history() {
@@ -166,8 +177,26 @@ byId("module-views").addEventListener("click", (event) => {
   }
 });
 byId("evidence-table").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-run]");
-  if (button) act(() => refresh(button.dataset.run));
+  const runButton = event.target.closest("[data-run]");
+  if (runButton) {
+    act(() => refresh(runButton.dataset.run));
+    return;
+  }
+  const actionButton = event.target.closest("[data-action]");
+  if (actionButton && actionButton.dataset.action.startsWith("permit:")) {
+    const passId = actionButton.dataset.action.slice("permit:".length);
+    act(async () => {
+      const id = state.snapshot?.manifest?.run_id;
+      if (!id) throw new Error("请先运行并归档批次，再签发许可");
+      const result = await request(
+        `/api/batches/${encodeURIComponent(id)}/gate/permits/${encodeURIComponent(passId)}`,
+        {method: "POST"},
+      );
+      await refreshGate(id);
+      paintEvidence();
+      showNote(result.reused ? "许可已存在，沿用原签发" : `已签发 ${result.permit.permit_id}`);
+    });
+  }
 });
 filter.addEventListener("input", () => paintEvidence());
 

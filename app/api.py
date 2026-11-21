@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 
 from app.modules.m7_batches.pipeline import run_pipeline
+from app.modules.m8_gate.decisions import gate_decisions
 from app.sources import read_sources
 
 router = APIRouter(prefix="/api")
@@ -55,3 +56,14 @@ def dashboard(request: Request, sample: str = "dirty", run_id: str | None = None
         return {"manifest": manifest, "data": results}
     sources = read_sources(request.app.state.settings.source_dir, sample)
     return {"manifest": None, "data": run_pipeline(sources)}
+
+
+@router.get("/gate", tags=["闸口放行"])
+def gate(request: Request, sample: str = "dirty", run_id: str | None = None):
+    """未归档时给出只读放行范围预览；归档后的签发状态走 /api/batches/{id}/gate。"""
+    if run_id is not None:
+        _, results = request.app.state.store.read(run_id)
+        return {"run_id": run_id, "sample": sample, "data": gate_decisions(results)}
+    sources = read_sources(request.app.state.settings.source_dir, sample)
+    results = run_pipeline(sources)
+    return {"run_id": None, "sample": sample, "data": gate_decisions(results)}

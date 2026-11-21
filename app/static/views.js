@@ -24,8 +24,10 @@ export function dateTime(value) {
 const col = (label, read, numeric = false) => ({label, read, numeric});
 const source = (obj) => obj.source.ref;
 const joined = (list) => list?.join(" / ");
-const labels = {pass: "正常", warn: "偏载", severe: "严重", matched: "已核平", review: "待复秤"};
-const styles = {pass: "ok", warn: "warn", severe: "bad", matched: "ok", review: "warn"};
+const labels = {pass: "正常", warn: "偏载", severe: "严重", matched: "已核平", review: "待复秤",
+  release: "放行", hold: "暂扣"};
+const styles = {pass: "ok", warn: "warn", severe: "bad", matched: "ok", review: "warn",
+  release: "ok", hold: "bad"};
 const displayStatus = (level) => ({text: labels[level], level: styles[level]});
 
 const issueColumns = [
@@ -91,6 +93,41 @@ export function moduleViews(name, snapshot, history) {
         col("复秤证据", (r) => joined(r.review_refs)),
       ]], ["磅单隔离", stage?.ticket_issues, issueColumns], ["触发隔离汇总", data?.quarantine, issueColumns],
     ]};
+    case "gate": {
+      const gate = snapshot?.gate;
+      const scope = gate?.scope;
+      const summary = scope
+        ? `可放行 ${scope.release_count} · 暂扣 ${scope.hold_count} · 已签许可 ${gate.issued_count ?? 0}`
+        : "";
+      const decision = (row) => displayStatus(row.decision);
+      const permit = (row) => row.permit
+        ? {text: row.permit.permit_id, level: "ok", title: row.permit.issued_at}
+        : {text: "未签发"};
+      return {summary, views: [
+        ["放行工作台", gate?.rows, [
+          col("车次", (r) => r.pass_id), col("车牌", (r) => r.plate),
+          col("闸口结论", decision), col("许可", permit),
+          col("操作", (r) => {
+            if (r.decision !== "release") return {text: "不可放行", level: "bad"};
+            if (r.permit) return {text: "已放行", level: "ok"};
+            return gate.manifest
+              ? {text: "签发放行", action: `permit:${r.pass_id}`}
+              : {text: "归档后签发"};
+          }),
+          col("磅单号", (r) => r.ticket_id), col("版次", (r) => r.ticket_revision, true),
+          col("有效轮载 kg", (r) => r.wheel_kg, true), col("差额 kg", (r) => r.difference_kg, true),
+          col("暂扣原因", (r) => joined(r.reasons)), col("原因码", (r) => joined(r.codes)),
+          col("磅单证据", (r) => joined(r.ticket_refs)), col("轮载证据", (r) => joined(r.wheel_refs)),
+          col("复秤证据", (r) => joined(r.review_refs)),
+        ]],
+        ["放行范围", scope ? scope.release_pass_ids.map((pass_id) => ({pass_id})) : [], [
+          col("可放行车次", (r) => r.pass_id),
+        ]],
+        ["暂扣清单", scope ? scope.hold_pass_ids.map((pass_id) => ({pass_id})) : [], [
+          col("暂扣车次", (r) => r.pass_id),
+        ]],
+      ]};
+    }
     case "batches": return {summary: `${history.length} 条归档`, views: [
       ["归档批次", history, [
         col("批次号", (r) => ({text: r.run_id.slice(0, 12), run: r.run_id})),
@@ -135,7 +172,7 @@ export function renderTable(view, query) {
     for (const [index, value] of values.entries()) {
       const td = row.insertCell();
       const text = String(valueText(value));
-      td.title = text;
+      td.title = value?.title ?? text;
       if (columns[index].numeric) td.className = "num";
       if (value?.level) {
         td.append(element("i", "", `lamp ${value.level}`), text);
@@ -144,6 +181,11 @@ export function renderTable(view, query) {
         button.type = "button";
         button.dataset.run = value.run;
         button.title = value.run;
+        td.append(button);
+      } else if (value?.action) {
+        const button = element("button", text);
+        button.type = "button";
+        button.dataset.action = value.action;
         td.append(button);
       } else {
         td.textContent = text || "—";

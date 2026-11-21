@@ -38,4 +38,6 @@ REASONS = {
     "SOURCE_CHANGED": "源文件或规则已变更",
     "REPLAY_MISMATCH": "重算结果与归档不一致",
     "STORE_BUSY": "批次库暂忙",
+    "GATE_HOLD": "车辆未核平，暂不满足放行条件",
+    "PERMIT_DUPLICATE": "放行许可已签发，重复请求被忽略",
 }

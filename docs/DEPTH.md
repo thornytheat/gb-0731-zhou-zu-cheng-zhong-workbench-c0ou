@@ -14,6 +14,7 @@
 | M5 偏载判级 | 核查左重、右重和临界偏载 | `GET /api/balance` | `app/modules/m5_balance/thresholds.py` `app/modules/m5_balance/service.py` | `tests/test_balance.py` |
 | M6 整车磅单勾稽 | 审核磅单版次、差额和待复秤原因 | `GET /api/reconcile` | `app/modules/m6_reconcile/tickets.py` `app/modules/m6_reconcile/service.py` | `tests/test_reconcile.py` |
 | M7 称重批次 | 提交样例、重算、追溯并下载复核包 | `POST /api/batches` | `app/modules/m7_batches/service.py` `app/modules/m7_batches/export.py` `app/store.py` | `tests/test_batches.py` |
+| M8 闸口放行 | 依同一归档快照定放行范围，逐车签发不可变许可 | `GET /api/batches/{id}/gate` `POST /api/batches/{id}/gate/permits/{车次}` | `app/modules/m8_gate/decisions.py` `app/modules/m8_gate/service.py` | `tests/test_gate.py` |
 
 ## 陷阱登记
 
